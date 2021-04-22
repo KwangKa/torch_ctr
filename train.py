@@ -10,6 +10,7 @@ from sklearn.metrics import roc_auc_score
 
 from dataset.util import get_data
 from model.lr import LR
+from model.fm import FM
 
 
 def parse_args():
@@ -25,13 +26,18 @@ def parse_args():
     parser.add_argument("--epoch", type=int, default=100, help="epoch")
     parser.add_argument("--lr", type=float, default=0.005, help="learning rate")
     parser.add_argument("--weight_decay", type=float, default=1e-6, help="weight decay")
+
+    parser.add_argument("--fm_hidden", type=int, default=20, help="fm embedding dim")
     args = parser.parse_args()
     return args
 
 
 def get_model(args, field_dims):
-    if args.model_name == "lr":
+    model_name = args.model_name
+    if model_name == "lr":
         model = LR(field_dims)
+    elif model_name == "fm":
+        model = FM(field_dims, args.fm_hidden)
     else:
         raise ValueError("Invalid model name:{0}".format(args.model_name))
     return model
