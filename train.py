@@ -3,13 +3,19 @@
 # @Author  : kaka
 
 import argparse
+from tqdm import tqdm
+import torch
+from sklearn.metrics import roc_auc_score
 from dataset.util import get_data
+from model.lr import LR
 
 
 def parse_args():
     parser = argparse.ArgumentParser()
+    parser.add_argument("--model_name", type=str, default="lr", help="lr|fm|ffm|deepfm")
+    parser.add_argument("--device", type=str, default="cpu", help="cpu|cuda:0")
     parser.add_argument("--datapath", type=str, default="./data/criteo_sampled_data_10k.csv", help="criteo data path")
-    parser.add_argument("--num_workers", type=int, default=4, help="data loader worker num")
+    parser.add_argument("--num_workers", type=int, default=0, help="data loader worker num")
     parser.add_argument("--min_thres", type=int, default=10, help="feature count less than min_thres will be merged")
     parser.add_argument("--batch_size", type=int, default=128, help="batch_size")
     parser.add_argument("--epoch", type=int, default=20, help="epoch")
@@ -19,17 +25,61 @@ def parse_args():
     return args
 
 
+def get_model(args, field_dims):
+    if args.model_name == "lr":
+        model = LR(field_dims)
+    else:
+        raise ValueError("Invalid model name:{0}".format(args.model_name))
+    return model
+
+
+def train_model(model, train_iter, val_iter, device, args):
+    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+    criterion = torch.nn.BCELoss()
+    model.to(device)
+    for epoch_idx in range(1, args.epoch + 1):
+        model.train()
+        tk0 = tqdm(train_iter, smoothing=0, mininterval=1.0)
+        total_loss = 0
+        for i, (fea, label) in enumerate(tk0):
+            optimizer.zero_grad()
+            fea.to(device)
+            label.to(device)
+            pred = model(fea)
+            loss = criterion(pred, label.float())
+            loss.backward()
+            optimizer.step()
+            total_loss += loss.item()
+            if (i + 1) % 10 == 0:
+                tk0.set_postfix(loss=total_loss / 10)
+        auc = eval_model(model, val_iter, device)
+        print("epoch {0}, auc {1:.4f}".format(epoch_idx, auc))
+
+
+def eval_model(model, data_iter, device):
+    model.eval()
+    with torch.no_grad():
+        target = []
+        pred = []
+        for fea, label in data_iter:
+            fea.to(device)
+            label.to(device)
+            cur_pred = model(fea)
+            target.extend(label.tolist())
+            pred.extend(cur_pred.tolist())
+    auc = roc_auc_score(target, pred)
+    return auc
+
+
 def main():
     args = parse_args()
     print(args)
-    train_iter, val_iter, test_iter = get_data(args)
-
-    for feature, label in train_iter:
-        print(feature.shape)
-        print(feature)
-        print(label.shape)
-        print(label)
-        break
+    train_iter, val_iter, test_iter, field_dims = get_data(args)
+    model = get_model(args, field_dims)
+    device = torch.device(args.device)
+    train_model(model, train_iter, val_iter, device, args)
+    test_auc = eval_model(model, test_iter, device)
+    print("\ntest auc :{0:.4f}".format(test_auc))
 
 
 if __name__ == "__main__":

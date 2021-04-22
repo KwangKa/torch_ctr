@@ -8,6 +8,7 @@ from dataset.criteo import CriteoDataset
 
 def get_data(args):
     criteo_ds = CriteoDataset(dataset_path=args.datapath, rebuild_cache=False, min_threshold=args.min_thres)
+    field_dims = criteo_ds.field_dims
     train_num = int(len(criteo_ds) * 0.8)
     val_num = int(len(criteo_ds) * 0.1)
     test_num = int(len(criteo_ds) - train_num - val_num)
@@ -15,4 +16,4 @@ def get_data(args):
     train_data_loader = DataLoader(train_ds, batch_size=args.batch_size, num_workers=args.num_workers)
     val_data_loader = DataLoader(val_ds, batch_size=args.batch_size, num_workers=args.num_workers)
     test_data_loader = DataLoader(test_ds, batch_size=args.batch_size, num_workers=args.num_workers)
-    return train_data_loader, val_data_loader, test_data_loader
+    return train_data_loader, val_data_loader, test_data_loader, field_dims
